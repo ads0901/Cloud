@@ -1,107 +1,65 @@
-terraform {
-  backend "azurerm"{
-  }
-}
-#Create Resource Groups
-resource "azurerm_resource_group" "app" {
-  name = "${var.app-rg}"
-  location = "${var.location}"
-  tags = {
-    costcenter            = "${var.costcenter}"
-    environmentinfo       = "${var.environmentinfo}"
-    ownerinfo             = "${var.ownerinfo}"
-    applicationname       = "${var.applicationname}"
-    platform              = "${var.platform}"
-    deploymenttype        = "${var.deploymenttype}"
-    notificationdistlist  = "${var.notificationdistlist}"
-    trproductid           = "${var.trproductid}"
-  }
-}
-resource "azurerm_resource_group" "cs" {
-  name = "${var.cs-rg}"
-  location = "${var.location}"
-  tags = {
-    costcenter            = "${var.costcenter}"
-    environmentinfo       = "${var.environmentinfo}"
-    ownerinfo             = "${var.ownerinfo}"
-    applicationname       = "${var.applicationname}"
-    platform              = "${var.platform}"
-    deploymenttype        = "${var.deploymenttype}"
-    notificationdistlist  = "${var.notificationdistlist}"
-    trproductid           = "${var.trproductid}"
-  }
-}
-resource "azurerm_resource_group" "db" {
-  name = "${var.db-rg}"
-  location = "${var.location}"
-  tags = {
-    costcenter            = "${var.costcenter}"
-    environmentinfo       = "${var.environmentinfo}"
-    ownerinfo             = "${var.ownerinfo}"
-    applicationname       = "${var.applicationname}"
-    platform              = "${var.platform}"
-    deploymenttype        = "${var.deploymenttype}"
-    notificationdistlist  = "${var.notificationdistlist}"
-    trproductid           = "${var.trproductid}"
-  }
-}
-#########################################################################################
-#Get Common Existing Resource Information
-data "azurerm_resource_group" "vnet" {
-  name = "${var.vnetrg}"
-}
-data "azurerm_resource_group" "mgmtrg" {
-  name = "${var.mgmtrg}"
-}
-data "azurerm_recovery_services_vault" "mgmtrv" {
-  name                = "${var.mgmtrv}"
-  resource_group_name = "${data.azurerm_resource_group.mgmtrg.name}"
-}
-#########################################################################################
-#Get SAP App Server Existing Resource Information
-data "azurerm_subnet" "app" {
-  name                 = "${var.app-subnet}"
-  virtual_network_name = "${var.vnetname}"
-  resource_group_name  = "${data.azurerm_resource_group.vnet.name}"
-}
-data "azurerm_recovery_services_protection_policy_vm" "app" {
-  name                = "${var.app-policy}"
-  recovery_vault_name = "${data.azurerm_recovery_services_vault.mgmtrv.name}"
-  resource_group_name = "${data.azurerm_resource_group.mgmtrg.name}"
-}
-#########################################################################################
-#Get SAP Central Services Server Existing Resource Information
-data "azurerm_subnet" "cs" {
-  name                 = "${var.cs-subnet}"
-  virtual_network_name = "${var.vnetname}"
-  resource_group_name  = "${data.azurerm_resource_group.vnet.name}"
-}
-data "azurerm_recovery_services_protection_policy_vm" "cs" {
-  name                = "${var.cs-policy}"
-  recovery_vault_name = "${data.azurerm_recovery_services_vault.mgmtrv.name}"
-  resource_group_name = "${data.azurerm_resource_group.mgmtrg.name}"
-}
-#########################################################################################
-#Get SAP Hana DB Server Existing Resource Information
-data "azurerm_subnet" "db" {
-  name                 = "${var.db-subnet}"
-  virtual_network_name = "${var.vnetname}"
-  resource_group_name  = "${data.azurerm_resource_group.vnet.name}"
-}
-#########################################################################################
-#Create Proximity Placement Group
-resource "azurerm_proximity_placement_group" "ppg" {
-  name                = "${var.ppgname}"
-  location            = "${azurerm_resource_group.db.location}"
-  resource_group_name = "${azurerm_resource_group.db.name}"
-  tags = {
-    costcenter            = "${var.costcenter}"
-    environmentinfo       = "${var.environmentinfo}"
-    ownerinfo             = "${var.ownerinfo}"
-    applicationname       = "${var.applicationname}"
-    platform              = "${var.platform}"
-    deploymenttype        = "${var.deploymenttype}"
-    notificationdistlist  = "${var.notificationdistlist}"
-    trproductid           = "${var.trproductid}"
+resource "azurerm_storage_account" "avaecloud_storageacc" {  //Here defined a storage account for disk
+  name                     = "avaecloudstgacc"  
+  resource_group_name      = "${azurerm_resource_group.resourcegroup.name}"  
+  location                 = "${var.azure_location}"  
+  account_tier             = "Standard"  
+  account_replication_type = "GRS"  
+}  
+  
+resource "azurerm_storage_container" "avaecloud_storagecont" {  //Here defined a storage account container for disk
+  name                  = "avaecloudstoragecont"  
+  resource_group_name   = "${azurerm_resource_group.resourcegroup.name}"  
+  storage_account_name  = "${azurerm_storage_account.avaecloud_storageacc.name}"  
+  container_access_type = "private"  
+}  
+  
+resource "azurerm_managed_disk" "avaecloud_datadisk" {  //Here defined data disk structure
+  name                 = "avaeclouddatadisk"  
+  location             = "${var.azure_location}"  
+  resource_group_name  = "${azurerm_resource_group.resourcegroup.name}"  
+  storage_account_type = "Standard_LRS"  
+  create_option        = "Empty"  
+  disk_size_gb         = "1023"  
+}  
+  
+resource "azurerm_virtual_machine" "avaecloud_vm" {  //Here defined virtual machine
+  name                  = "avaecloudvm"  
+  location              = "${var.azure_location}"  
+  resource_group_name   = "${azurerm_resource_group.resourcegroup.name}"  
+  network_interface_ids = ["${azurerm_network_interface.avaecloud_nic.id}"]  
+  vm_size               = "Standard_DS2_v2"  //Here defined virtual machine size
+  
+  storage_image_reference {  //Here defined virtual machine OS
+    publisher = "MicrosoftWindowsServer"  
+    offer     = "WindowsServer"  
+    sku       = "2019-Datacenter"  
+    version   = "latest"  
+  }  
+ 
+  storage_os_disk {  //Here defined OS disk
+    name              = "avaecloudosdisk"  
+    caching           = "ReadWrite"  
+    create_option     = "FromImage"  
+    managed_disk_type = "Standard_LRS"  
+    #  vhd_uri             = "${var.mycustimg}"
+  }  
+  
+  storage_data_disk {  //Here defined actual data disk by referring to above structure
+    name            = "${azurerm_managed_disk.avaecloud_datadisk.name}"  
+    managed_disk_id = "${azurerm_managed_disk.avaecloud_datadisk.id}"  
+    create_option   = "Attach"  
+    lun             = 1  
+    disk_size_gb    = "${azurerm_managed_disk.avaecloud_datadisk.disk_size_gb}"  
+  }  
+  
+  os_profile {  //Here defined admin uid/pwd and also comupter name
+    computer_name  = "avaecloudhost"  
+    admin_username = "${var.username}"  
+    admin_password = "${var.password}"  
+  }  
+  
+  os_profile_windows_config {  //Here defined autoupdate config and also vm agent config
+    enable_automatic_upgrades = true  
+    provision_vm_agent        = true   
   }
 }
